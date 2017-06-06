@@ -21,7 +21,7 @@ var ProgressBar = require('ProgressBarAndroid');
 var DefaultTabBar = require('./DefaultTabBar');
 
 // Initialize constants and variables
-const host_name = 'http://9622b846.ngrok.io';
+const host_name = 'http://3c91b26f.ngrok.io';
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -68,9 +68,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#8E8E8E',
   }
 });
-let tweetSearch = new ListView.DataSource({rowHasChanged: (r1, r2) => r1 !== r2});
 let realtimeSearch = new ListView.DataSource({rowHasChanged: (r1, r2) => r1 !== r2});
-let dbSearch = new ListView.DataSource({rowHasChanged: (r1, r2) => r1 !== r2});
 let realTweetsStore = [];
 
 // Main Component
@@ -78,7 +76,7 @@ export default class firstTry extends Component {
 
   constructor(props) {
     super(props);
-    this.state = {query: '', isReceived: false, tweets: tweetSearch, isStreamOn: false, realtimeTweets: realtimeSearch, dbTweets: dbSearch};
+    this.state = {query: '', tweets: null, isStreamOn: false, realtimeTweets: realtimeSearch, dbTweets: null};
   }
 
   componentDidMount() {
@@ -86,19 +84,12 @@ export default class firstTry extends Component {
     this.socket = SocketIOClient(host_name);
   }
 
-  componentDidUpdate() {
-    /*if("listHeight" in this.state &&
-           "footerY" in this.state &&
-               this.state.footerY > this.state.listHeight)
-    {
-        var scrollDistance = this.state.listHeight - this.state.footerY;
-        this.refs.list.getScrollResponder().scrollTo({y: -scrollDistance, animated: true});
-    }*/
-  }
-
   componentWillUnmount() {
     // Disconnect socket once app is destroyed
     this.socket.disconnect();
+    // Empty states
+    this.setState({isStreamOn: false, tweets:null, dbTweets:null, realtimeTweets:null});
+    realTweetsStore = [];
   }
 
   /* Helper render functions */
@@ -118,29 +109,30 @@ export default class firstTry extends Component {
           style={styles.buttonStyle}
           title='Submit query'
         />
-      {this.state.isReceived && <ScrollView style={{height: 520}}>
-                                  <ListView
+      {this.state.tweets!=null && <ScrollView style={{height: 520}}>
+                                  <FlatList
                                       style={styles.tweetsListView}
-                                      dataSource={this.state.tweets}
-                                      renderRow={(rowData) => {
+                                      data={this.state.tweets}
+                                      renderItem={( rowData ) => {
                                                                 return (
-                                                                  <ScrollView>
+                                                                  <View renderToHardwareTextureAndroid={true}>
                                                                     <View style={styles.container}>
-                                                                      <Image source={{uri: rowData.avatar_url}} style={styles.photo}/>
-                                                                      <Text style={styles.title}>{rowData.author_name}</Text>
+                                                                      <Image source={{uri: rowData.item.avatar_url}} style={styles.photo}/>
+                                                                      <Text style={styles.title}>{rowData.item.author_name}</Text>
                                                                     </View>
                                                                     <View>
-                                                                      <Text style={styles.text}>{rowData.text}</Text>
-                                                                      <Text style={styles.date}>{`${rowData.date_time.week_day}, ${rowData.date_time.date}/${rowData.date_time.month}/${rowData.date_time.year} ${rowData.date_time.time} GTM`}</Text>
-                                                                      <Text style={styles.link}>{rowData.tweet_url}</Text>
+                                                                      <Text style={styles.text}>{rowData.item.text}</Text>
+                                                                      <Text style={styles.date}>{`${rowData.item.date_time.week_day}, ${rowData.item.date_time.date}/${rowData.item.date_time.month}/${rowData.item.date_time.year} ${rowData.item.date_time.time} GTM`}</Text>
+                                                                      <Text style={styles.link}>{rowData.item.tweet_url}</Text>
                                                                     </View>
-                                                                  </ScrollView>
+                                                                  </View>
                                                                 );
                                                 }
                                       }
-                                      renderSeparator={(sectionId, rowId) => <View key={rowId} style={styles.separator} />}
+                                      ItemSeparatorComponent={this.renderSeparator}
+                                      keyExtractor={ item => item.tweet_url }
                                   />
-                                </ScrollView>
+                              </ScrollView>
         }
       </View>
     );
@@ -169,7 +161,7 @@ export default class firstTry extends Component {
                                       dataSource={this.state.realtimeTweets}
                                       renderRow={(rowData) => {
                                                                 return (
-                                                                  <ScrollView>
+                                                                  <View renderToHardwareTextureAndroid={true}>
                                                                     <View style={styles.container}>
                                                                       <Image source={{uri: rowData.avatar_url}} style={styles.photo}/>
                                                                       <Text style={styles.title}>{rowData.author_name}</Text>
@@ -179,7 +171,7 @@ export default class firstTry extends Component {
                                                                       <Text style={styles.date}>{`${rowData.date_time.week_day}, ${rowData.date_time.date}/${rowData.date_time.month}/${rowData.date_time.year} ${rowData.date_time.time} GTM`}</Text>
                                                                       <Text style={styles.link}>{rowData.tweet_url}</Text>
                                                                     </View>
-                                                                  </ScrollView>
+                                                                  </View>
                                                                 );
                                                 }
                                       }
@@ -226,6 +218,14 @@ export default class firstTry extends Component {
     );
   }
 
+  renderSeparator = () => {
+    return (
+      <View
+        style={styles.separator}
+      />
+    );
+  };
+
   /* Handle button clicks */
   handleSearchClick() {
     Alert.alert('Info', this.state.query);
@@ -233,7 +233,7 @@ export default class firstTry extends Component {
     if (!(this.socket.hasListeners('feed-search-result'))) {
       this.socket.on('feed-search-result', (error, data) => {
         if (data!=null) {
-          this.setState({isReceived: true, tweets: tweetSearch.cloneWithRows(data.tweets)});
+          this.setState({tweets: data.tweets});
           Alert.alert('Info', 'Data is received');
         }
       })
@@ -270,7 +270,6 @@ export default class firstTry extends Component {
         {this.renderTwitterSearch()}
         {this.renderRealtimeSearch()}
         {this.renderDBSearch()}
-
       </ScrollableTabView>
     );
   }
